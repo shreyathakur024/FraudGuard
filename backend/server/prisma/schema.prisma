@@ -7,44 +7,53 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  name         String
-  email        String        @unique
-  password     String
-  createdAt    DateTime      @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  balance   Float    @default(10000)
+  createdAt DateTime @default(now())
 
-  transactions Transaction[]
-  alerts       Alert[]
+  transactions         Transaction[] @relation("SentTransactions")
+  receivedTransactions Transaction[] @relation("ReceivedTransactions")
+  alerts               Alert[]
 
   @@map("users")
 }
 
 model Transaction {
-  id              Int          @id @default(autoincrement())
-  userId          Int
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  recipientId   Int
 
-  merchant        String
-  amount          Float
-  paymentMethod   String
-  timestamp       DateTime
+  merchant      String
+  amount        Float
+  paymentMethod String
+  timestamp     DateTime
 
-  status          String       @default("PENDING")
+  status        String   @default("PENDING")
 
-  createdAt       DateTime     @default(now())
+  latitude      Float?
+  longitude     Float?
 
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  prediction      Prediction?
-  alerts          Alert[]
+  createdAt     DateTime @default(now())
+
+  user          User @relation("SentTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  recipient     User @relation("ReceivedTransactions", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  prediction    Prediction?
+  alerts        Alert[]
 
   @@index([userId])
+  @@index([recipientId])
   @@index([createdAt])
 
   @@map("transactions")
 }
 
 model Prediction {
-  id                Int         @id @default(autoincrement())
-  transactionId     Int         @unique
+  id                Int      @id @default(autoincrement())
+  transactionId     Int      @unique
 
   fraudProbability  Float
   riskScore         Float
@@ -53,29 +62,35 @@ model Prediction {
   predictionLabel   String
   threshold         Float
 
+  locationRiskScore Float    @default(0)
+  locationAnomaly   Boolean  @default(false)
+
+  finalRiskScore    Float
+  finalRiskLevel    String
+
   shapExplanation   Json?
 
-  createdAt         DateTime    @default(now())
+  createdAt         DateTime @default(now())
 
-  transaction       Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@map("predictions")
 }
 
 model Alert {
-  id              Int          @id @default(autoincrement())
-  userId          Int
-  transactionId   Int?
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  transactionId Int?
 
-  title           String
-  message         String
-  severity        String
-  isRead          Boolean      @default(false)
+  title         String
+  message       String
+  severity      String
+  isRead        Boolean  @default(false)
 
-  createdAt       DateTime     @default(now())
+  createdAt     DateTime @default(now())
 
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])

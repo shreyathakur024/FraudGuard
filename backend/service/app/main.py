@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel, Field
 
 import numpy as np
@@ -18,7 +17,7 @@ import os
 app = FastAPI(
     title="FraudGuard ML Service",
     description="XGBoost-based financial fraud detection service",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 
@@ -44,49 +43,38 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(
     BASE_DIR,
     "model",
-    "finshield_xgb.pkl"
-)
-
-SCALER_PATH = os.path.join(
-    BASE_DIR,
-    "model",
-    "finshield_scaler.pkl"
+    "fraudguard_xgb.pkl"
 )
 
 CONFIG_PATH = os.path.join(
     BASE_DIR,
     "model",
-    "finshield_config.json"
+    "fraudguard_config.json"
 )
 
 
 # =========================================================
-# FEATURE NAMES
+# LOAD MODEL + CONFIG
 # =========================================================
 
-FEATURE_NAMES = (
-    ["Time"]
-    + [f"V{i}" for i in range(1, 29)]
-    + ["Amount"]
-)
-
-
-# =========================================================
-# LOAD MODEL
-# =========================================================
+model = None
+explainer = None
+FEATURE_NAMES = []
+threshold = 0.90
 
 try:
 
     model = joblib.load(MODEL_PATH)
 
-    scaler = joblib.load(SCALER_PATH)
-
     with open(CONFIG_PATH, "r") as f:
         config = json.load(f)
 
-    threshold = config.get("threshold", 0.52)
+    FEATURE_NAMES = config["features"]
+    threshold = config.get("threshold", 0.90)
 
     print("FraudGuard ML model loaded successfully.")
+    print("Features:", FEATURE_NAMES)
+    print("Feature count:", len(FEATURE_NAMES))
     print("Threshold:", threshold)
 
 except Exception as e:
@@ -94,16 +82,10 @@ except Exception as e:
     print("Error loading ML files:")
     print(e)
 
-    model = None
-    scaler = None
-    threshold = 0.52
-
 
 # =========================================================
 # SHAP EXPLAINER
 # =========================================================
-
-explainer = None
 
 if model is not None:
 
@@ -118,25 +100,19 @@ if model is not None:
         print("SHAP initialization failed:")
         print(e)
 
+
+# =========================================================
 # REQUEST SCHEMA
+# =========================================================
 
 class PredictionRequest(BaseModel):
 
     features: list[float] = Field(
         ...,
-        min_length=30,
-        max_length=30,
-        description="30 model features: Time, V1-V28, Amount"
+        min_length=16,
+        max_length=16,
+        description="16 transaction features used by the FraudGuard XGBoost model"
     )
-
-
-# SHAP RESPONSE
-
-class ShapFeature(BaseModel):
-
-    feature: str
-    value: float
-    shap_value: float
 
 
 # =========================================================
@@ -149,7 +125,8 @@ def root():
     return {
         "message": "FraudGuard FastAPI ML Service is running",
         "model": "XGBoost",
-        "features": 30
+        "features": len(FEATURE_NAMES),
+        "threshold": threshold
     }
 
 
@@ -163,8 +140,8 @@ def health():
     return {
         "status": "healthy",
         "model_loaded": model is not None,
-        "scaler_loaded": scaler is not None,
-        "shap_loaded": explainer is not None
+        "shap_loaded": explainer is not None,
+        "feature_count": len(FEATURE_NAMES)
     }
 
 
@@ -190,27 +167,25 @@ def model_info():
 
 def preprocess(features):
 
-    X = np.array(features, dtype=float).reshape(1, -1)
-
-    if X.shape[1] != 30:
+    if len(features) != len(FEATURE_NAMES):
 
         raise ValueError(
-            f"Expected 30 features, received {X.shape[1]}"
+            f"Expected {len(FEATURE_NAMES)} features, "
+            f"received {len(features)}"
         )
 
-    # -----------------------------------------------------
-    # IMPORTANT:
-    # During training only Time and Amount were scaled.
-    #
-    # Time -> index 0
-    # Amount -> index 29
-    # -----------------------------------------------------
+    # Check for invalid numbers
+    if not all(np.isfinite(feature) for feature in features):
 
-    time_amount = X[:, [0, 29]]
+        raise ValueError(
+            "All features must contain valid finite numbers"
+        )
 
-    scaled_time_amount = scaler.transform(time_amount)
-
-    X[:, [0, 29]] = scaled_time_amount
+    # Create DataFrame using EXACT training feature order
+    X = pd.DataFrame(
+        [features],
+        columns=FEATURE_NAMES
+    )
 
     return X
 
@@ -252,16 +227,14 @@ def get_shap_explanation(X):
 
     shap_values = explainer.shap_values(X)
 
-    # For binary XGBoost models this should normally be
-    # a 2D array: (samples, features)
-
-    if isinstance(shap_values, list):
-
-        shap_values = shap_values[-1]
-
     shap_values = np.asarray(shap_values)
 
-    if shap_values.ndim == 2:
+    # Handle possible SHAP output shapes
+    if shap_values.ndim == 3:
+
+        values = shap_values[0, :, -1]
+
+    elif shap_values.ndim == 2:
 
         values = shap_values[0]
 
@@ -273,33 +246,25 @@ def get_shap_explanation(X):
 
     for feature, value, shap_value in zip(
         FEATURE_NAMES,
-        X[0],
+        X.iloc[0].values,
         values
     ):
 
-        explanation.append({
-
-            "feature": feature,
-
-            "value": float(value),
-
-            "shap_value": float(shap_value)
-
-        })
+        explanation.append(
+            {
+                "feature": feature,
+                "value": float(value),
+                "shap_value": float(shap_value)
+            }
+        )
 
     # Most influential features first
-
     explanation.sort(
         key=lambda x: abs(x["shap_value"]),
         reverse=True
     )
 
     return explanation[:10]
-
-
-# =========================================================
-# PREDICTION
-# =========================================================
 
 @app.post("/predict")
 def predict(request: PredictionRequest):
@@ -313,34 +278,15 @@ def predict(request: PredictionRequest):
 
     try:
 
-        # -------------------------------------------------
-        # PREPROCESS
-        # -------------------------------------------------
-
         X = preprocess(request.features)
-
-
-        # -------------------------------------------------
-        # PROBABILITY
-        # -------------------------------------------------
 
         probability = float(
             model.predict_proba(X)[0][1]
         )
 
-
-        # -------------------------------------------------
-        # PREDICTION
-        # -------------------------------------------------
-
         prediction = int(
             probability >= threshold
         )
-
-
-        # -------------------------------------------------
-        # RISK
-        # -------------------------------------------------
 
         risk_score = round(
             probability * 100,
@@ -351,11 +297,7 @@ def predict(request: PredictionRequest):
             probability
         )
 
-        # SHAP
-
         shap_explanation = get_shap_explanation(X)
-
-        # RESPONSE
 
         return {
 
@@ -370,19 +312,21 @@ def predict(request: PredictionRequest):
 
             "prediction": prediction,
 
-            "prediction_label":
+            "prediction_label": (
                 "FRAUD"
                 if prediction == 1
-                else "LEGITIMATE",
+                else "LEGITIMATE"
+            ),
 
             "threshold": threshold,
 
-            "shap_explanation":
-                shap_explanation
-
+            "shap_explanation": shap_explanation
         }
 
+
     except Exception as e:
+
+        print("Prediction error:", e)
 
         raise HTTPException(
             status_code=500,

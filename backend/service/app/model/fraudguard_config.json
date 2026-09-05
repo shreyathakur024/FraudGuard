@@ -1,0 +1,24 @@
+{
+    "features": [
+        "step",
+        "hour",
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "sender_balance_change",
+        "receiver_balance_change",
+        "amount_to_sender_balance",
+        "amount_to_receiver_balance",
+        "type_CASH_IN",
+        "type_CASH_OUT",
+        "type_DEBIT",
+        "type_PAYMENT",
+        "type_TRANSFER"
+    ],
+    "threshold": 0.9,
+    "model_type": "XGBoost",
+    "dataset": "PaySim",
+    "target": "isFraud"
+}
