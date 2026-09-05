@@ -1,6 +1,7 @@
 const axios = require('axios');
 
-const FASTAPI_URL = "http://127.0.0.1:8000";
+// const FASTAPI_URL = "http://127.0.0.1:8000";
+const FASTAPI_URL = process.env.FASTAPI_URL;
 
 const predictTransaction = async (features)=>{
     try{
