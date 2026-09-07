@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { API_BASE_URL, parseApiResponse } from "../services/api";
 
 const AuthContext = createContext(null);
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -22,16 +21,16 @@ export function AuthProvider({ children }) {
 
   const fetchCurrentUser = async (token) => {
     try {
-      const response = await fetch(`${API_URL}/auth/me`, {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const data = await response.json();
+      const data = await parseApiResponse(response);
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         localStorage.removeItem("fraudguard_token");
         setUser(null);
         return;
@@ -50,20 +49,28 @@ export function AuthProvider({ children }) {
 
   // LOGIN
   const login = async (email, password) => {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
+    let response;
+    try {
+      response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+    } catch (netErr) {
+      console.error("Login network error:", netErr);
+      throw new Error(
+        "Unable to connect to the FraudGuard server. Please verify the backend is running."
+      );
+    }
 
-    const data = await response.json();
+    const data = await parseApiResponse(response);
 
-    if (!response.ok || !data.success) {
+    if (!data.success) {
       throw new Error(data.message || "Login failed");
     }
 
@@ -78,21 +85,29 @@ export function AuthProvider({ children }) {
 
   // SIGNUP
   const signup = async (name, email, password) => {
-    const response = await fetch(`${API_URL}/auth/signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        password,
-      }),
-    });
+    let response;
+    try {
+      response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      });
+    } catch (netErr) {
+      console.error("Signup network error:", netErr);
+      throw new Error(
+        "Unable to connect to the FraudGuard server. Please verify the backend is running."
+      );
+    }
 
-    const data = await response.json();
+    const data = await parseApiResponse(response);
 
-    if (!response.ok || !data.success) {
+    if (!data.success) {
       throw new Error(data.message || "Signup failed");
     }
 

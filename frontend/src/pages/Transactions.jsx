@@ -8,7 +8,7 @@ import {
   FaArrowRight,
 } from "react-icons/fa";
 
-const API_URL=import.meta.env.VITE_API_URL;
+import { apiFetch } from "../services/api";
 
 const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
@@ -21,27 +21,7 @@ const Transactions = () => {
       setLoading(true);
       setError("");
 
-      const token = localStorage.getItem("fraudguard_token");
-
-      if (!token) {
-        throw new Error("Authentication required");
-      }
-
-      const response = await fetch(`${API_URL}/api/transactions`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message || "Unable to fetch transactions"
-        );
-      }
+      const data = await apiFetch("/transactions");
 
       setTransactions(data.data?.transactions || []);
     } catch (err) {

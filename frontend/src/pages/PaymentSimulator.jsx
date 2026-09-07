@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { apiFetch } from "../services/api";
 
 function PaymentSimulator() {
   const navigate = useNavigate();
@@ -120,60 +119,34 @@ function PaymentSimulator() {
     setError("");
 
     try {
-      const token =
-        localStorage.getItem(
-          "fraudguard_token"
-        );
+      const data = await apiFetch("/transactions/predict", {
+        method: "POST",
+        body: JSON.stringify({
+          recipientEmail:
+            formData.recipientEmail
+              .trim()
+              .toLowerCase(),
 
-      if (!token) {
-        throw new Error(
-          "Please login again to continue."
-        );
-      }
+          merchant:
+            formData.merchant.trim(),
 
-      const response = await fetch(
-        `${API_URL}/api/transactions/predict`,
-        {
-          method: "POST",
+          amount:
+            Number(formData.amount),
 
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          paymentMethod:
+            formData.paymentMethod,
 
-          body: JSON.stringify({
-            recipientEmail:
-              formData.recipientEmail
-                .trim()
-                .toLowerCase(),
+          // Location is optional.
+          // If enabled, send current coordinates.
+          latitude:
+            location?.latitude ?? null,
 
-            merchant:
-              formData.merchant.trim(),
+          longitude:
+            location?.longitude ?? null,
+        }),
+      });
 
-            amount:
-              Number(formData.amount),
-
-            paymentMethod:
-              formData.paymentMethod,
-
-            // Location is optional.
-            // If enabled, send current coordinates.
-            latitude:
-              location?.latitude ?? null,
-
-            longitude:
-              location?.longitude ?? null,
-          }),
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
+      if (!data.success) {
         throw new Error(
           data.message ||
             "Transaction analysis failed."

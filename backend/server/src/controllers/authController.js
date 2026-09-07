@@ -43,9 +43,16 @@ const signup = async (req, res) => {
   } catch (error) {
     console.error("Signup error:", error);
 
-    return res.status(400).json({
+    if (error.message === "An account with this email already exists") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: error.message || "Unable to create account",
+      message: "Unable to create account. Please try again later.",
     });
   }
 };
@@ -78,9 +85,16 @@ const login = async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
 
-    return res.status(401).json({
+    if (error.message === "Invalid email or password") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: error.message || "Invalid email or password",
+      message: "Unable to log in. Please try again later.",
     });
   }
 };

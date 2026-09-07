@@ -17,7 +17,7 @@ import StatCard from "../components/StatCard";
 import TransactionTable from "../components/TransactionTable";
 import AlertCard from "../components/AlertCard";
 
-const API_URL=import.meta.env.VITE_API_URL;
+import { apiFetch } from "../services/api";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -55,29 +55,7 @@ function Dashboard() {
   // ─────────────────────────────────────
 
   const authenticatedFetch = async (endpoint) => {
-    const token = localStorage.getItem("fraudguard_token");
-
-    if (!token) {
-      throw new Error("Authentication required");
-    }
-
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.message || "Unable to fetch dashboard data"
-      );
-    }
-
-    return data;
+    return apiFetch(endpoint);
   };
 
   // ─────────────────────────────────────

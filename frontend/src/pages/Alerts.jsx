@@ -8,7 +8,7 @@ import {
   FaArrowRight,
 } from "react-icons/fa";
 
-const API_URL = import.meta.env.VITE_API_URL;
+import { apiFetch } from "../services/api";
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState([]);
@@ -20,25 +20,7 @@ const Alerts = () => {
       setLoading(true);
       setError("");
 
-      const token = localStorage.getItem("fraudguard_token");
-
-      if (!token) {
-        throw new Error("Authentication required");
-      }
-
-      const response = await fetch(`${API_URL}/api/alerts`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Unable to fetch alerts");
-      }
+      const data = await apiFetch("/alerts");
 
       setAlerts(data.data?.alerts || []);
     } catch (err) {
